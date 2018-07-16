@@ -26,7 +26,7 @@ phase_6:
   401138:	movl	(%rsp,%rax,4), %eax
   40113b:	cmpl	%eax, (%rbp)
   40113e:	jne	    <phase_6+0x51>
-  401140:	callq	<explode_bomb>     ;no repeat with first element
+  401140:	callq	<explode_bomb>     ;no repeats
   401145:	addl	$1, %ebx
   401148:	cmpl	$5, %ebx
   40114b:	jle	    <phase_6+0x41>
@@ -41,7 +41,7 @@ phase_6:
   401166:	addq	$4, %rax
   40116a:	cmpq	%rsi, %rax
   40116d:	jne	    <phase_6+0x6c>
-  40116f:	movl	$0, %esi            ;array has been reverted
+  40116f:	movl	$0, %esi            ;array has been built
   401174:	jmp	    <phase_6+0xa3>    ;jump to 401197
 
   401176:	movq	8(%rdx), %rdx
@@ -78,7 +78,29 @@ phase_6:
   4011cd:	movq	%rdx, %rcx
   4011d0:	jmp	  <phase_6+0xc9>      ;or jump back to the loop 4011bd
 
-  ;rdx refers to node1, rbx refers to node6
+  ;example:
+  ;for inputs: 3 5 2 1 4 6
+  ;the stack will be like this:
+  
+  ;..
+  ;...
+  ;0x6032d0 <node1>
+  ;0x6032f0 <node3>
+  ;0x603320 <node6>
+  ;0x603310 <node5>
+  ;0x6032e0 <node2>
+  ;0x603300 <node4>
+  ;rsp+32
+  ;...
+  ;..
+  ;.
+  ;1
+  ;3
+  ;6
+  ;5
+  ;2
+  ;4
+  ;rsp
 
   ;|address           | value | node
   ;|0x6032d0 <node1>: |	332	  |  1
