@@ -29,11 +29,15 @@ L6:
 L5:
 	mrmovq (%rax), %r8 	# data[i]
 	mrmovq 8(%rax), %r9 	# data[i + 1]
-	rrmovq %r9, %r10
-	subq %r8, %r10
-	jge L3
-	rmmovq %r8, 8(%rax)
-	rmmovq %r9, (%rax)
+	rrmovq %r8, %r10
+	rrmovq %r9, %r11
+	xorq %r8, %r9
+	subq %r11, %r10
+	cmovl %r11, %r8
+	xorq %r9, %r8
+	xorq %r8, %r9
+	rmmovq %r9, 8(%rax)
+	rmmovq %r8, (%rax)
 
 L3:
 	irmovq $8, %r8
@@ -46,14 +50,7 @@ L3:
 L2:
 	rrmovq  %rsi, %r8 	# %rdi needs not to be altered
 	subq 	%rdi, %r8 	# equivalent to cmp %rdi, %rsi
-<<<<<<< HEAD
 	jg	L6
-=======
-	jle	L8        	# to the end, return to halt
-	jmp	L6
-
-L8:
->>>>>>> archtect 4.47
 	ret
 
 	
