@@ -46,8 +46,7 @@ L3:
 L2:
 	rrmovq  %rsi, %r8 	# %rdi needs not to be altered
 	subq 	%rdi, %r8 	# equivalent to cmp %rdi, %rsi
-	jle	L8        	# to the end, return to halt
-	jmp	L6
+	jg	L6
 
 L8:
 	ret
