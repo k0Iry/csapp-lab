@@ -1,0 +1,73 @@
+# Execution begins at address 0
+	.pos 0
+	irmovq stack, %rsp	# set up stack pointer
+	call main
+	halt
+
+# Align
+	.align 8
+
+main:
+	irmovq $64, %r8		# CNT
+	irmovq $0, %r9		# i
+	subq %r8, %rsp		# reserve space for storage
+	rrmovq %rsp, %rbp
+	jmp L1
+
+switchv:
+	irmovq $0, %rax				# result
+	irmovq switch_table, %r14		# table address
+	addq %rdi, %rdi
+	addq %rdi, %rdi
+	addq %rdi, %rdi
+	addq %rdi, %r14				# rdi * 8, I know it's kind of dummy :p
+	mrmovq (%r14), %r12
+	pushq %r12
+	ret
+
+L3:
+	irmovq $2730, %rax
+	ret
+
+L4:
+	irmovq $3003, %rax
+	ret
+
+L5:
+	irmovq $3276, %rax
+	ret
+
+L6:
+	irmovq $3549, %rax
+	ret
+
+L2:
+	rrmovq %r9, %rdi
+	call switchv		# invoke switchv funtion
+	rmmovq %rax, (%rbp)	# write to reserved space
+	irmovq $8, %r10
+	irmovq $1, %r11
+	addq %r10, %rbp
+	addq %r11, %r9
+
+L1:
+	rrmovq %r9, %r10
+	irmovq $8, %r11
+	subq %r11, %r10
+	jl L2
+	addq %r8, %rsp		# restore stack
+	ret
+
+switch_table:
+	.quad L6
+	.quad L3
+	.quad L6
+	.quad L4
+	.quad L5
+	.quad L6
+	.quad L4
+	.quad L6
+
+# Stack starts here and grows to lower addresses
+	.pos 0x200
+stack:
