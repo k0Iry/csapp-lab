@@ -75,9 +75,6 @@ int main(int argc, char * const * argv)
     }
 
     int set_size = 1 << set_bits;
-    // int block_size = 1 << block_bits;
-
-    // printf("sets : %d, lines: %d, block size: %d, verbose = %d, trace: %s\n", set_size, lines, block_size, verbose, trace);
 
     if (optind > argc)
     {
@@ -102,20 +99,19 @@ int main(int argc, char * const * argv)
     char line[256];
     while (fgets(line, sizeof(line), stream))
     {
-        char op_type[1];
+        char op_type;
         void *addr = NULL;
         size_t op_size;
         bool is_valid = false;
 
-        analyze_op(line, op_type, &addr, &op_size, &is_valid);
-
+        analyze_op(line, &op_type, &addr, &op_size, &is_valid);
+        
         if (is_valid)
         {
             long tag = (intptr_t)addr >> (block_bits + set_bits);
             long set = ((intptr_t)addr >> block_bits) & set_mask;
-            // long block = (intptr_t)addr & block_mask;
 
-            access_cache(cache, tag, set, &hit, &miss, &evict, *op_type, verbose, line);
+            access_cache(cache, tag, set, &hit, &miss, &evict, op_type, verbose, line);
         }
     }
 
@@ -151,11 +147,11 @@ static void analyze_op(const char * const operation, char * const op_type, void 
 {
     if (!isspace(*operation))
     {
-        printf("Ignored instruction operation: %s\n", operation);
+        // printf("Ignored instruction operation: %s\n", operation);
         return;
     }
     *is_valid = true;
-    if (sscanf(operation, " %s %p,%lu", op_type, addr, op_size) != EOF)
+    if (sscanf(operation, " %c %p,%lu", op_type, addr, op_size) == 3)
     {
         // printf("type: %s address %p, size %lu\n", op_type, *addr, *op_size);
     }
@@ -163,6 +159,11 @@ static void analyze_op(const char * const operation, char * const op_type, void 
 
 static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit, int *miss, int *evict, char op_type, bool verbose, char *op)
 {
+    printf("set index: %ld\n", set_index);
+    int verbose_hits = 0;
+    int verbose_misses = 0;
+    int verbose_evictions = 0;
+
     cache_line_t *lines = (cache + set_index)->cache;
     size_t num = (cache + set_index)->lines;
 
@@ -173,26 +174,48 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
             // hit
             *hit += 1;
             *hit += (op_type == 'M');
+
+            verbose_hits += 1;
+            verbose_hits += (op_type == 'M');
         }
         else if (num > 1)
         {
+            bool need_eviction = true;
             for (int i = 1; i < num; i++)
             {
+                // set associative cache
                 if ((lines + i)->tagbit == tag)
                 {
                     // hit
                     *hit += 1;
+                    *hit += (op_type == 'M');
+
+                    verbose_hits += 1;
+                    verbose_hits += (op_type == 'M');
+                    need_eviction = false;
                     break;
                 }
                 else if (!((lines + i)->is_dirty))
                 {
-                    *miss += 1;
                     // cold miss
                     (lines + i)->is_dirty = true;
                     (lines + i)->tagbit = tag;
+
+                    *miss += 1;
+                    *hit += (op_type == 'M');
+
+                    verbose_misses  += 1;
+                    verbose_hits += (op_type == 'M');
+                    need_eviction = false;
+                    break;
                 }
             }
-            // evict with LRU algorithm
+
+            if (need_eviction)
+            {
+                // evict with LRU algorithm
+                
+            }
         }
         else
         {
@@ -203,6 +226,10 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
             *miss += 1;
             *evict += 1;
             *hit += (op_type == 'M');
+
+            verbose_misses  += 1;
+            verbose_evictions += 1;
+            verbose_hits += (op_type == 'M');
         }
     }
     else
@@ -213,9 +240,13 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
 
         *miss += 1;
         *hit += (op_type == 'M');
+
+        verbose_misses  += 1;
+        verbose_hits += (op_type == 'M');
     }
+
     if (verbose)
     {
-        printf("%s hits: %d, miss: %d, evict: %d\n", op, *hit, *miss, *evict);
+        printf("%s hits: %d, miss: %d, evict: %d\n", op, verbose_hits, verbose_misses, verbose_evictions);
     }
 }
