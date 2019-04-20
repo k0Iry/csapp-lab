@@ -10,6 +10,7 @@
 
 typedef struct cache_line
 {
+    struct cache_line *next;
     long tagbit;
     bool is_dirty;
 } cache_line_t;
@@ -21,12 +22,16 @@ typedef struct cache_set
 } cache_set_t;
 
 static void initCache(cache_set_t **cache, size_t sets, size_t lines);
+static void initCacheLines(cache_line_t **ptr, size_t lines);
 static void freeCache(cache_set_t *cache, size_t sets);
+static void freeCacheLine(cache_line_t *ptr);
 
-static void analyze_op(const char * const operation, char * const op_type, void **addr, size_t *op_size, bool *is_valid);
+static void analyze_op(const char *const operation, char *const op_type, void **addr, size_t *op_size, bool *is_valid);
 static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit, int *miss, int *evict, char op_type, bool verbose, char *op);
 
-int main(int argc, char * const * argv)
+static void bring_to_head(cache_line_t **head, cache_line_t *node);
+
+int main(int argc, char *const *argv)
 {
     int set_bits, lines, block_bits;
     bool verbose = false;
@@ -44,33 +49,33 @@ int main(int argc, char * const * argv)
     {
         switch (opt)
         {
-            case 'h':
-                printf("%s", usage);
-                exit(EXIT_SUCCESS);
+        case 'h':
+            printf("%s", usage);
+            exit(EXIT_SUCCESS);
 
-            case 'v':
-                verbose = true;
-                break;
+        case 'v':
+            verbose = true;
+            break;
 
-            case 's':
-                set_bits = atoi(optarg);
-                break;
+        case 's':
+            set_bits = atoi(optarg);
+            break;
 
-            case 'E':
-                lines = atoi(optarg);
-                break;
+        case 'E':
+            lines = atoi(optarg);
+            break;
 
-            case 'b':
-                block_bits = atoi(optarg);
-                break;
+        case 'b':
+            block_bits = atoi(optarg);
+            break;
 
-            case 't':
-                trace = optarg;
-                break;
-        
-            default:
-                fprintf(stderr, "%s", usage);
-                exit(EXIT_FAILURE);
+        case 't':
+            trace = optarg;
+            break;
+
+        default:
+            fprintf(stderr, "%s", usage);
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -105,7 +110,7 @@ int main(int argc, char * const * argv)
         bool is_valid = false;
 
         analyze_op(line, &op_type, &addr, &op_size, &is_valid);
-        
+
         if (is_valid)
         {
             long tag = (intptr_t)addr >> (block_bits + set_bits);
@@ -128,32 +133,77 @@ static void initCache(cache_set_t **cache, size_t sets, size_t lines)
 
     for (int i = 0; i < sets; i++)
     {
-        (*cache + i)->cache = (cache_line_t *)malloc(sizeof(cache_line_t) * lines);
-        memset((*cache + i)->cache, 0, sizeof(cache_line_t) * lines);
+        initCacheLines(&(*cache + i)->cache, lines);
         (*cache + i)->lines = lines;
     }
+}
+
+static void initCacheLines(cache_line_t **ptr, size_t lines)
+{
+    *ptr = (cache_line_t *)malloc(sizeof(cache_line_t));
+    memset(*ptr, 0, sizeof(cache_line_t));
+
+    cache_line_t *copy = *ptr;
+    for (int i = 0; i < lines - 1; i++)
+    {
+        copy->next = (cache_line_t *)malloc(sizeof(cache_line_t));
+        memset(copy->next, 0, sizeof(cache_line_t));
+        copy = copy->next;
+    }
+}
+
+static void freeCacheLine(cache_line_t *ptr)
+{
+    if (!ptr)
+        return;
+    if (ptr->next)
+    {
+        freeCacheLine(ptr->next);
+        ptr->next = NULL;
+    }
+    free(ptr);
 }
 
 static void freeCache(cache_set_t *cache, size_t sets)
 {
     for (int i = 0; i < sets; i++)
     {
-        free((cache + i)->cache);
+        freeCacheLine((cache + i)->cache);
     }
     free(cache);
 }
 
-static void analyze_op(const char * const operation, char * const op_type, void **addr, size_t *op_size, bool *is_valid)
+static void analyze_op(const char *const operation, char *const op_type, void **addr, size_t *op_size, bool *is_valid)
 {
     if (!isspace(*operation))
     {
-        // printf("Ignored instruction operation: %s\n", operation);
+        printf("Ignored instruction operation: %s\n", operation);
         return;
     }
+
     *is_valid = true;
     if (sscanf(operation, " %c %p,%lu", op_type, addr, op_size) == 3)
     {
-        // printf("type: %s address %p, size %lu\n", op_type, *addr, *op_size);
+        printf("type: %s address %p, size %lu\n", op_type, *addr, *op_size);
+    }
+}
+
+/** 
+ * every time hit occurs we update our head pointer
+ */
+static void bring_to_head(cache_line_t **head, cache_line_t *node)
+{
+    cache_line_t *prev = NULL;
+    for (cache_line_t *found = *head; found != node; found = found->next)
+    {
+        prev = found;
+    }
+
+    if (prev != NULL)
+    {
+        prev->next = node->next;
+        node->next = *head;
+        *head = node;
     }
 }
 
@@ -184,7 +234,7 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
             for (int i = 1; i < num; i++)
             {
                 // set associative cache
-                if ((lines + i)->tagbit == tag)
+                if (lines->next->tagbit == tag)
                 {
                     // hit
                     *hit += 1;
@@ -193,33 +243,49 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
                     verbose_hits += 1;
                     verbose_hits += (op_type == 'M');
                     need_eviction = false;
+                    bring_to_head(&((cache + set_index)->cache), lines->next);
                     break;
                 }
-                else if (!((lines + i)->is_dirty))
+                else if (!lines->next->is_dirty)
                 {
                     // cold miss
-                    (lines + i)->is_dirty = true;
-                    (lines + i)->tagbit = tag;
+                    lines->next->is_dirty = true;
+                    lines->next->tagbit = tag;
 
                     *miss += 1;
                     *hit += (op_type == 'M');
 
-                    verbose_misses  += 1;
+                    verbose_misses += 1;
                     verbose_hits += (op_type == 'M');
                     need_eviction = false;
+                    bring_to_head(&((cache + set_index)->cache), lines->next);
                     break;
                 }
+                lines = lines->next;
             }
 
             if (need_eviction)
             {
                 // evict with LRU algorithm
-                
+                cache_line_t *head = (cache + set_index)->cache;
+                while (head->next)
+                {
+                    head = head->next;
+                }
+                head->tagbit = tag;
+
+                *miss += 1;
+                *evict += 1;
+                *hit += (op_type == 'M');
+
+                verbose_misses += 1;
+                verbose_hits += (op_type == 'M');
+                bring_to_head(&((cache + set_index)->cache), head);
             }
         }
         else
         {
-            // evict this line directly 
+            // evict this line directly
             lines->is_dirty = true;
             lines->tagbit = tag;
 
@@ -227,21 +293,21 @@ static void access_cache(cache_set_t *cache, long tag, long set_index, int *hit,
             *evict += 1;
             *hit += (op_type == 'M');
 
-            verbose_misses  += 1;
+            verbose_misses += 1;
             verbose_evictions += 1;
             verbose_hits += (op_type == 'M');
         }
     }
     else
     {
-        // cold miss 
+        // cold miss
         lines->is_dirty = true;
         lines->tagbit = tag;
 
         *miss += 1;
         *hit += (op_type == 'M');
 
-        verbose_misses  += 1;
+        verbose_misses += 1;
         verbose_hits += (op_type == 'M');
     }
 
