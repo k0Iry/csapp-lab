@@ -8,7 +8,8 @@ char *tfgets(char *str, int size, FILE *stream)
     alarm(5);
     if (fgets(str, size, stream) == NULL)
     {
-        if (errno == EINTR)
+        if (errno == EINTR)     // you may need to modify the slow sys call's behavior while encountering interrupt,
+                                // e.g SA_RESTART option may not be needed
         {
             return NULL;
         }
