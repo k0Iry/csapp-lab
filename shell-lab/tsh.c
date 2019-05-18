@@ -411,9 +411,16 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) 
 {
     // find fg job
-    pid_t pid = fgpid(jobs);
-    printf("Job (%d) terminated by signal %d\n", pid2jid(pid), sig);
-    kill(-pid, SIGINT);     /* trigger SIGCHLD signal */
+    sigset_t mask_all, prev_all;
+    Sigfillset(&mask_all);
+    pid_t pid;
+    if ((pid = fgpid(jobs)))
+    {
+        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+        kill(-pid, SIGINT);     /* trigger SIGCHLD signal */
+        printf("Job (%d) terminated by signal %d\n", pid2jid(pid), sig);
+        Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    }
 }
 
 /*
