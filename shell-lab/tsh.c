@@ -414,13 +414,13 @@ void sigint_handler(int sig)
     sigset_t mask_all, prev_all;
     Sigfillset(&mask_all);
     pid_t pid;
+    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
     if ((pid = fgpid(jobs)))
     {
-        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
         kill(-pid, SIGINT);     /* trigger SIGCHLD signal */
         printf("Job (%d) terminated by signal %d\n", pid2jid(pid), sig);
-        Sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
+    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
 }
 
 /*
