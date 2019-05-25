@@ -411,16 +411,18 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) 
 {
     // find fg job
-    sigset_t mask_all, prev_all;
-    Sigfillset(&mask_all);
-    pid_t pid;
-    Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-    if ((pid = fgpid(jobs)))
+    pid_t pid = fgpid(jobs);
+    if (pid)
     {
-        kill(-pid, SIGINT);     /* trigger SIGCHLD signal */
-        printf("Job (%d) terminated by signal %d\n", pid2jid(pid), sig);
+        // The only thing special about signals is that non-default, non-ignore handlers are RESET on execve
+        // because the handler's address makes no sense in a new executable loaded in child process's context
+        printf("Job (%d) terminated by signal %d\n", pid, sig);
+        kill(-pid, SIGINT);
     }
-    Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    else
+    {
+        printf("There's no foreground job now.\n");
+    }
 }
 
 /*
