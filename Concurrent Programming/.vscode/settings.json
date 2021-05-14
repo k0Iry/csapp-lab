@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "cstdlib": "c",
+        "locale": "c",
+        "stdio.h": "c",
+        "csapp.h": "c",
+        "tuple": "c",
+        "utility": "c"
+    }
+}
